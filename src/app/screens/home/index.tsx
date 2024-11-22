@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   Container,
   FixedNavBar,
@@ -8,78 +8,61 @@ import {
   ScrollableContent,
   NavigationButtons,
   NavigationText,
+  FloatingAddButton,
+  FloatingAddIcon,
 } from './styles';
-import Card from '@/src/components/Card/Card';
-import { Posts } from '@/types/Posts';
+import { useDispatch, useSelector } from 'react-redux';
 import api from '../../api/api';
-import { useSearch } from '@/src/context/SearchContext';
 import NavBar from '@/src/components/NavBar/NavBar';
+import Card from '@/src/components/Card/Card';
+import { useSearch } from '@/src/context/SearchContext';
+import { NavigationProp, useNavigation } from '@react-navigation/native';
+import { RootStackParamList } from '@/types/NavigationTypes';
+import { RootState } from '@/src/store';
+import { setPosts } from '@/src/store/slices/postsSlice';
 
+const ItemsPage = 10;
 
 const Home = () => {
-  const [posts, setPosts] = useState<Posts[]>([]);
-  const [filteredPosts, setFilteredPosts] = useState<Posts[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
+  const dispatch = useDispatch();
+  const posts = useSelector((state: RootState) => state.posts.posts);
+
+  const [filteredPosts, setFilteredPosts] = React.useState(posts.slice(0, ItemsPage));
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [totalPages, setTotalPages] = React.useState(Math.ceil(posts.length / ItemsPage));
   const { searchText } = useSearch();
-  
-  const ItemsPage = 10;
-  const MaxVisiblePages = 4;
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
   useEffect(() => {
     const fetchPosts = async () => {
       try {
         const response = await api.get('/posts');
-        const data = response.data;
-        setPosts(data);
-        setTotalPages(Math.ceil(data.length / ItemsPage));
-        setFilteredPosts(data.slice(0, ItemsPage));
+        dispatch(setPosts(response.data));
       } catch (error) {
         console.error('Erro ao carregar posts:', error);
       }
     };
 
-    fetchPosts();
-  }, []);
+    if (!posts.length) {
+      fetchPosts();
+    }
+  }, [dispatch, posts.length]);
 
   useEffect(() => {
-    if (searchText) {
-      const filtered = posts.filter((post) =>
-        post.title.toLowerCase().includes(searchText.toLowerCase()) ||
-        post.body.toLowerCase().includes(searchText.toLowerCase())
-      );
-      setTotalPages(Math.ceil(filtered.length / ItemsPage));
-      setFilteredPosts(filtered.slice((currentPage - 1) * ItemsPage, currentPage * ItemsPage));
-    } else {
-      setFilteredPosts(posts.slice((currentPage - 1) * ItemsPage, currentPage * ItemsPage));
-    }
+    const filtered = searchText
+      ? posts.filter(
+          (post) =>
+            post.title.toLowerCase().includes(searchText.toLowerCase()) ||
+            post.body.toLowerCase().includes(searchText.toLowerCase())
+        )
+      : posts;
+
+    setTotalPages(Math.ceil(filtered.length / ItemsPage));
+    setFilteredPosts(filtered.slice((currentPage - 1) * ItemsPage, currentPage * ItemsPage));
   }, [searchText, posts, currentPage]);
 
-  const handlePageChange = (pageNumber: number) => {
-    setCurrentPage(pageNumber);
-  };
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-
-  const handlePrevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
-
-  const getVisiblePages = () => {
-    const startPage = Math.max(currentPage - Math.floor(MaxVisiblePages / 2), 1);
-    const endPage = Math.min(startPage + MaxVisiblePages - 1, totalPages);
-
-    const pages = [];
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
-    }
-    return pages;
+  const navigateToCreatePost = () => {
+    navigation.navigate('screens/create-post/index');
   };
 
   return (
@@ -91,26 +74,34 @@ const Home = () => {
       </ScrollableContent>
 
       <PaginationContainer>
-        <NavigationButtons onPress={handlePrevPage} disabled={currentPage === 1}>
+        <NavigationButtons
+          onPress={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+          disabled={currentPage === 1}
+        >
           <NavigationText disabled={currentPage === 1}>Anterior</NavigationText>
         </NavigationButtons>
 
-        {getVisiblePages().map((page) => (
+        {Array.from({ length: totalPages }).map((_, index) => (
           <PageButton
-            key={page}
-            onPress={() => handlePageChange(page)}
-            isSelected={currentPage === page}
+            key={index}
+            isSelected={currentPage === index + 1}
+            onPress={() => setCurrentPage(index + 1)}
           >
-            <PageButtonText isSelected={currentPage === page}>{page}</PageButtonText>
+            <PageButtonText isSelected={currentPage === index + 1}>{index + 1}</PageButtonText>
           </PageButton>
         ))}
 
-        {currentPage < totalPages && (
-          <NavigationButtons onPress={handleNextPage}>
-            <NavigationText>Próxima</NavigationText>
-          </NavigationButtons>
-        )}
+        <NavigationButtons
+          onPress={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+          disabled={currentPage === totalPages}
+        >
+          <NavigationText disabled={currentPage === totalPages}>Próxima</NavigationText>
+        </NavigationButtons>
       </PaginationContainer>
+
+      <FloatingAddButton onPress={navigateToCreatePost}>
+        <FloatingAddIcon>+</FloatingAddIcon>
+      </FloatingAddButton>
 
       <FixedNavBar>
         <NavBar />
