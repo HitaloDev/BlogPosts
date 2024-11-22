@@ -15,6 +15,7 @@ import { CardProps } from '@/types/CardProps';
 import { useFavorites } from '@/src/context/FavoritesContext';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { TouchableOpacity } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '@/src/app/api/api';
 import { RootStackParamList } from '@/types/NavigationTypes';
 
@@ -27,6 +28,18 @@ const Card = ({ title, body, userId, id }: CardProps) => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
+        const storedUser = await AsyncStorage.getItem('user');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          if (parsedUser?.id === userId) {
+            setUser({
+              name: parsedUser.name,
+              username: parsedUser.username || parsedUser.name.toLowerCase().replace(/\s/g, ''),
+            });
+            return;
+          }
+        }
+
         const response = await api.get(`/users/${userId}`);
         setUser({
           name: response.data.name,
@@ -64,8 +77,8 @@ const Card = ({ title, body, userId, id }: CardProps) => {
             <ProfileImage source={getUserImage(userId)} />
           </TouchableOpacity>
           <UserInfo>
-            <Username>{user?.name}</Username>
-            <UserHandle>@{user?.username}</UserHandle>
+            <Username>{user?.name || 'Carregando...'}</Username>
+            <UserHandle>@{user?.username || 'loading'}</UserHandle>
           </UserInfo>
           <StarIcon
             name={id && isFavorite(id) ? 'star' : 'staro'}
